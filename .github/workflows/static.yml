@@ -1,0 +1,631 @@
+import React, { useState, useMemo } from 'react';
+import { Search, Plus, Edit2, Trash2, X, Save, MapPin, Phone, GraduationCap, Sparkles, Loader2, Copy, Check, Building } from 'lucide-react';
+
+// Dữ liệu mẫu trích xuất từ file RAW.csv của người dùng
+const initialData = [
+  { id: '1', donVi: 'Phường Bắc Giang', hoTen: 'Nguyễn Thị Hồng Vinh', gioiTinh: 'Nữ', ngaySinh: '1974-02-21', chuyenMon: 'Đại học', lyLuanCT: 'Trung cấp', chucVu: 'Chủ tịch', sdt: '0965277700', dangVien: true },
+  { id: '2', donVi: 'Phường Bắc Giang', hoTen: 'Nguyễn Thị Thuỳ Ninh', gioiTinh: 'Nữ', ngaySinh: '1982-04-22', chuyenMon: 'Đại học', lyLuanCT: 'Cao cấp', chucVu: 'Phó Chủ tịch Thường trực', sdt: '0978464325', dangVien: true },
+  { id: '3', donVi: 'Phường Bắc Giang', hoTen: 'Thân Thanh Huyền', gioiTinh: 'Nữ', ngaySinh: '1981-11-20', chuyenMon: 'Đại học', lyLuanCT: 'Cao cấp', chucVu: 'Phó Chủ tịch', sdt: '0983623000', dangVien: true },
+  { id: '1076', donVi: 'Xã Yên Trung', hoTen: 'Ngô Quang Thu', gioiTinh: 'Nam', ngaySinh: '1976-01-07', chuyenMon: 'Đại học', lyLuanCT: 'Trung cấp', chucVu: 'Phó Chủ tịch', sdt: '0942041175', dangVien: true },
+  { id: '1077', donVi: 'Xã Yên Trung', hoTen: 'Nguyễn Công Huệ', gioiTinh: 'Nam', ngaySinh: '1968-03-22', chuyenMon: 'Cao đẳng', lyLuanCT: 'Chưa qua đào tạo', chucVu: 'Phó Chủ tịch', sdt: '0976469772', dangVien: true },
+  { id: '1078', donVi: 'Xã Yên Trung', hoTen: 'Lê Văn Quý', gioiTinh: 'Nam', ngaySinh: '1964-07-02', chuyenMon: 'Đại học', lyLuanCT: 'Trung cấp', chucVu: 'Chuyên viên', sdt: '0912508850', dangVien: true },
+];
+
+export default function App() {
+  const [cadres, setCadres] = useState(initialData);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterDonVi, setFilterDonVi] = useState('Tất cả');
+  
+  // States cho Quản lý Đơn vị
+  const [donVis, setDonVis] = useState(() => Array.from(new Set(initialData.map(c => c.donVi))).sort());
+  const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
+  const [newUnitName, setNewUnitName] = useState('');
+
+  // Modal states for CRUD Cán bộ
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCadre, setEditingCadre] = useState(null);
+  
+  // AI Feature States
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState({ title: '', content: '' });
+  const [copiedText, setCopiedText] = useState(false);
+  
+  // Form state Cán bộ
+  const [formData, setFormData] = useState({
+    hoTen: '', donVi: '', gioiTinh: 'Nam', ngaySinh: '', chuyenMon: '', lyLuanCT: '', chucVu: '', sdt: '', dangVien: false
+  });
+
+  // Filter cadres
+  const filteredCadres = useMemo(() => {
+    return cadres.filter(c => {
+      const matchNameOrPhone = c.hoTen.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                               c.sdt.includes(searchTerm);
+      const matchDonVi = filterDonVi === 'Tất cả' || c.donVi === filterDonVi;
+      return matchNameOrPhone && matchDonVi;
+    });
+  }, [cadres, searchTerm, filterDonVi]);
+
+  // --- Handlers Quản lý Đơn vị ---
+  const handleAddUnit = (e) => {
+    e.preventDefault();
+    const trimmed = newUnitName.trim();
+    if (!trimmed) return;
+    
+    // Kiểm tra xem đơn vị đã tồn tại chưa (không phân biệt hoa thường để tránh trùng lặp)
+    const exists = donVis.some(dv => dv.toLowerCase() === trimmed.toLowerCase());
+    if (exists) {
+      alert(`Đơn vị "${trimmed}" đã tồn tại trong danh sách!`);
+      return;
+    }
+
+    setDonVis([...donVis, trimmed].sort());
+    setNewUnitName('');
+  };
+
+  const handleDeleteUnit = (unitToDelete) => {
+    // Kiểm tra xem có cán bộ nào đang thuộc đơn vị này không
+    const isUnitInUse = cadres.some(c => c.donVi === unitToDelete);
+    if (isUnitInUse) {
+      alert(`Không thể xóa "${unitToDelete}" vì đang có hồ sơ cán bộ thuộc đơn vị này.\nVui lòng chuyển đơn vị hoặc xóa các cán bộ liên quan trước.`);
+      return;
+    }
+
+    if (window.confirm(`Đồng chí có chắc chắn muốn xóa đơn vị: ${unitToDelete}?`)) {
+      setDonVis(donVis.filter(dv => dv !== unitToDelete));
+      // Nếu đang lọc theo đơn vị bị xóa thì reset về "Tất cả"
+      if (filterDonVi === unitToDelete) {
+        setFilterDonVi('Tất cả');
+      }
+    }
+  };
+
+  // --- Handlers for CRUD Cán bộ ---
+  const handleOpenAdd = () => {
+    setEditingCadre(null);
+    setFormData({ 
+      hoTen: '', 
+      donVi: filterDonVi !== 'Tất cả' ? filterDonVi : (donVis.length > 0 ? donVis[0] : ''), 
+      gioiTinh: 'Nam', 
+      ngaySinh: '', 
+      chuyenMon: '', 
+      lyLuanCT: '', 
+      chucVu: '', 
+      sdt: '', 
+      dangVien: false 
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (cadre) => {
+    setEditingCadre(cadre);
+    setFormData({ ...cadre });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = (id, name) => {
+    if (window.confirm(`Đồng chí có chắc chắn muốn xóa dữ liệu của cán bộ: ${name}?`)) {
+      setCadres(cadres.filter(c => c.id !== id));
+    }
+  };
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    if (editingCadre) {
+      // Update
+      setCadres(cadres.map(c => c.id === editingCadre.id ? { ...formData, id: c.id } : c));
+    } else {
+      // Add new
+      const newId = Date.now().toString();
+      setCadres([{ ...formData, id: newId }, ...cadres]);
+    }
+    setIsModalOpen(false);
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  // --- GEMINI AI INTEGRATION ---
+  
+  const callGeminiAPI = async (prompt) => {
+    const apiKey = ""; // API key will be injected by the environment
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      systemInstruction: {
+        parts: [{ text: "Bạn là một trợ lý ảo chuyên nghiệp hỗ trợ Ban Tổ chức - Kiểm tra Uỷ ban MTTQ. Trả lời bằng tiếng Việt, văn phong trang trọng, chuẩn mực công sở." }]
+      }
+    };
+
+    const retries = [1000, 2000, 4000, 8000, 16000];
+    const delay = ms => new Promise(res => setTimeout(res, ms));
+
+    for (let i = 0; i < retries.length + 1; i++) {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || "Không có phản hồi từ AI.";
+      } catch (error) {
+        if (i === retries.length) throw error;
+        await delay(retries[i]);
+      }
+    }
+  };
+
+  const handleAnalyzeTeam = async () => {
+    if (filteredCadres.length === 0) {
+      alert("Không có dữ liệu để phân tích.");
+      return;
+    }
+    
+    setAiModalOpen(true);
+    setAiLoading(true);
+    setAiResult({ title: `✨ Đánh giá Đội ngũ: ${filterDonVi !== 'Tất cả' ? filterDonVi : 'Toàn bộ danh sách'}`, content: '' });
+    setCopiedText(false);
+
+    // Chuẩn bị dữ liệu rút gọn để gửi cho LLM
+    const dataForPrompt = filteredCadres.map(c => ({
+      Ten: c.hoTen, 
+      GioiTinh: c.gioiTinh, 
+      NamSinh: c.ngaySinh.substring(0, 4), 
+      ChuyenMon: c.chuyenMon, 
+      LLCT: c.lyLuanCT, 
+      DangVien: c.dangVien ? 'Có' : 'Không'
+    }));
+
+    const prompt = `Dựa vào dữ liệu JSON danh sách cán bộ MTTQ sau đây: ${JSON.stringify(dataForPrompt)}
+    Hãy viết một báo cáo đánh giá ngắn gọn, chuyên nghiệp (khoảng 3-4 đoạn) về tình hình chất lượng cán bộ của đơn vị này. Bao gồm:
+    1. Tổng quan số lượng và tỷ lệ nam/nữ.
+    2. Đánh giá về chất lượng trình độ chuyên môn và lý luận chính trị.
+    3. Nhận xét về cơ cấu độ tuổi (trẻ hóa hay nhiều tuổi) và tỷ lệ đảng viên.
+    Trình bày dưới dạng gạch đầu dòng rõ ràng.`;
+
+    try {
+      const responseText = await callGeminiAPI(prompt);
+      setAiResult(prev => ({ ...prev, content: responseText }));
+    } catch (err) {
+      setAiResult(prev => ({ ...prev, content: "Đã xảy ra lỗi khi kết nối với AI. Vui lòng thử lại sau." }));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleGenerateIntro = async (cadre) => {
+    setAiModalOpen(true);
+    setAiLoading(true);
+    setAiResult({ title: `✨ Soạn thảo giới thiệu: Đ/c ${cadre.hoTen}`, content: '' });
+    setCopiedText(false);
+
+    const prompt = `Hãy soạn một đoạn văn ngắn (khoảng 2-3 câu) vô cùng trang trọng để người dẫn chương trình (MC) đọc giới thiệu vị đại biểu này tại một Hội nghị cấp Tỉnh. 
+    Thông tin đại biểu:
+    - Họ và tên: ${cadre.hoTen}
+    - Chức vụ: ${cadre.chucVu}
+    - Đơn vị công tác: ${cadre.donVi}
+    - Trình độ: ${cadre.chuyenMon}, Lý luận chính trị: ${cadre.lyLuanCT}.
+    Yêu cầu: Văn phong tôn trọng, súc tích, phù hợp với hội nghị chính trị của MTTQ.`;
+
+    try {
+      const responseText = await callGeminiAPI(prompt);
+      setAiResult(prev => ({ ...prev, content: responseText }));
+    } catch (err) {
+      setAiResult(prev => ({ ...prev, content: "Đã xảy ra lỗi khi kết nối với AI. Vui lòng thử lại sau." }));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(aiResult.content).then(() => {
+      setCopiedText(true);
+      setTimeout(() => setCopiedText(false), 2000);
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-10">
+      {/* Header */}
+      <header className="bg-blue-700 text-white shadow-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold">Cơ sở Dữ liệu Cán bộ MTTQ Cấp Xã</h1>
+            <p className="text-blue-100 text-sm mt-1">Hệ thống theo dõi & quản lý nhân sự - Tỉnh Bắc Ninh</p>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Toolbar */}
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row gap-4 justify-between items-center">
+          <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto flex-1">
+            <div className="relative w-full md:w-80">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Tìm tên hoặc số điện thoại..."
+                className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="w-full md:w-64">
+              <select
+                className="block w-full pl-3 pr-10 py-2 border border-slate-300 rounded-lg leading-5 bg-slate-50 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+                value={filterDonVi}
+                onChange={(e) => setFilterDonVi(e.target.value)}
+              >
+                <option value="Tất cả">Tất cả đơn vị</option>
+                {donVis.map(dv => (
+                  <option key={dv} value={dv}>{dv}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            <button
+              onClick={handleAnalyzeTeam}
+              className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-blue-200 text-sm font-medium rounded-lg shadow-sm text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              <Sparkles className="h-4 w-4 mr-2 text-blue-500" />
+              ✨ Phân tích
+            </button>
+            <button
+              onClick={() => setIsUnitModalOpen(true)}
+              className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-lg shadow-sm text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              <Building className="h-4 w-4 mr-2 text-slate-500" />
+              Quản lý Đơn vị
+            </button>
+            <button
+              onClick={handleOpenAdd}
+              className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Thêm cán bộ
+            </button>
+          </div>
+        </div>
+
+        {/* Data Table */}
+        <div className="bg-white shadow-sm border border-slate-200 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-100">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Họ và Tên</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Chức vụ / Đơn vị</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Ngày sinh / Giới tính</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Trình độ</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Liên hệ</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-200">
+                {filteredCadres.length > 0 ? (
+                  filteredCadres.map((cadre) => (
+                    <tr key={cadre.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                              {cadre.hoTen}
+                              {cadre.dangVien && <span className="px-2 inline-flex text-[10px] leading-4 font-semibold rounded-full bg-red-100 text-red-800" title="Đảng viên">Đ</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-slate-900">{cadre.chucVu}</div>
+                        <div className="text-sm text-slate-500 flex items-center mt-1">
+                          <MapPin size={12} className="mr-1" /> {cadre.donVi}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-slate-900">{cadre.ngaySinh}</div>
+                        <div className="text-sm text-slate-500">{cadre.gioiTinh}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-slate-900 flex items-center">
+                          <GraduationCap size={14} className="mr-1 text-slate-400" /> {cadre.chuyenMon}
+                        </div>
+                        <div className="text-sm text-slate-500 mt-1">LLCT: {cadre.lyLuanCT}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                        <div className="flex items-center">
+                          <Phone size={14} className="mr-1 text-slate-400" /> {cadre.sdt}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button 
+                          onClick={() => handleGenerateIntro(cadre)}
+                          className="text-amber-500 hover:text-amber-700 mx-1 p-1.5 rounded-md hover:bg-amber-50 transition-colors border border-transparent hover:border-amber-200"
+                          title="AI soạn giới thiệu"
+                        >
+                          <Sparkles size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleOpenEdit(cadre)}
+                          className="text-blue-600 hover:text-blue-900 mx-1 p-1.5 rounded-md hover:bg-blue-50 transition-colors"
+                          title="Sửa"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(cadre.id, cadre.hoTen)}
+                          className="text-red-600 hover:text-red-900 mx-1 p-1.5 rounded-md hover:bg-red-50 transition-colors"
+                          title="Xóa"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
+                      Không tìm thấy dữ liệu cán bộ phù hợp với điều kiện lọc.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 text-sm text-slate-500 flex justify-between items-center">
+            <span>Tổng số: <strong className="text-slate-900">{filteredCadres.length}</strong> cán bộ</span>
+          </div>
+        </div>
+      </main>
+
+      {/* Modal Quản lý Đơn vị (Xã/Phường) */}
+      {isUnitModalOpen && (
+        <div className="fixed inset-0 z-[70] overflow-y-auto" aria-labelledby="unit-modal-title" role="dialog" aria-modal="true">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-slate-900 bg-opacity-50 transition-opacity" aria-hidden="true" onClick={() => setIsUnitModalOpen(false)}></div>
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div className="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4 border-b border-slate-100">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl leading-6 font-semibold text-slate-900 flex items-center" id="unit-modal-title">
+                    <Building className="h-5 w-5 mr-2 text-blue-600" /> Quản lý danh mục Đơn vị
+                  </h3>
+                  <button onClick={() => setIsUnitModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors">
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="bg-white px-4 py-5 sm:p-6">
+                <form onSubmit={handleAddUnit} className="mb-6 flex gap-2">
+                  <input 
+                    type="text" 
+                    value={newUnitName}
+                    onChange={(e) => setNewUnitName(e.target.value)}
+                    placeholder="Nhập tên Xã/Phường mới..." 
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={!newUnitName.trim()}
+                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Thêm
+                  </button>
+                </form>
+
+                <div className="border border-slate-200 rounded-md overflow-hidden">
+                  <div className="max-h-60 overflow-y-auto">
+                    <ul className="divide-y divide-slate-200">
+                      {donVis.length > 0 ? (
+                        donVis.map(dv => (
+                          <li key={dv} className="px-4 py-3 flex items-center justify-between hover:bg-slate-50">
+                            <span className="text-sm font-medium text-slate-700">{dv}</span>
+                            <button 
+                              onClick={() => handleDeleteUnit(dv)}
+                              className="text-slate-400 hover:text-red-600 p-1 rounded-md hover:bg-red-50 transition-colors"
+                              title="Xóa đơn vị này"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </li>
+                        ))
+                      ) : (
+                        <li className="px-4 py-4 text-center text-sm text-slate-500">Chưa có đơn vị nào.</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Ghi chú: Chỉ có thể xóa các đơn vị chưa có hồ sơ cán bộ trực thuộc.</p>
+              </div>
+
+              <div className="bg-slate-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-slate-200">
+                <button 
+                  type="button" 
+                  onClick={() => setIsUnitModalOpen(false)} 
+                  className="w-full inline-flex justify-center rounded-lg border border-slate-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto sm:text-sm transition-colors"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Result Modal */}
+      {aiModalOpen && (
+        <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="ai-modal-title" role="dialog" aria-modal="true">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-slate-900 bg-opacity-60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => !aiLoading && setAiModalOpen(false)}></div>
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div className="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-xl sm:w-full border border-blue-100">
+              
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-5 pt-5 pb-4 sm:p-6 sm:pb-4 border-b border-blue-100">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg leading-6 font-bold text-blue-900 flex items-center gap-2" id="ai-modal-title">
+                    <Sparkles className="text-amber-500 h-5 w-5" />
+                    {aiResult.title}
+                  </h3>
+                  {!aiLoading && (
+                    <button onClick={() => setAiModalOpen(false)} className="text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-200 transition-colors">
+                      <X size={20} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="px-5 py-6 sm:p-6 bg-white min-h-[150px]">
+                {aiLoading ? (
+                  <div className="flex flex-col items-center justify-center space-y-4 py-8 text-blue-600">
+                    <Loader2 className="h-10 w-10 animate-spin" />
+                    <p className="text-sm font-medium animate-pulse">Gemini AI đang phân tích dữ liệu...</p>
+                  </div>
+                ) : (
+                  <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">
+                    {aiResult.content}
+                  </div>
+                )}
+              </div>
+
+              {!aiLoading && (
+                <div className="bg-slate-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-slate-100">
+                  <button 
+                    onClick={copyToClipboard}
+                    className={`w-full inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white sm:ml-3 sm:w-auto sm:text-sm transition-colors ${copiedText ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                  >
+                    {copiedText ? <><Check className="h-4 w-4 mr-2" /> Đã sao chép</> : <><Copy className="h-4 w-4 mr-2" /> Sao chép văn bản</>}
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setAiModalOpen(false)} 
+                    className="mt-3 w-full inline-flex justify-center rounded-lg border border-slate-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Modal (CRUD Cán bộ) */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            {/* Background overlay */}
+            <div className="fixed inset-0 bg-slate-900 bg-opacity-50 transition-opacity" aria-hidden="true" onClick={() => setIsModalOpen(false)}></div>
+
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <div className="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4 border-b border-slate-100">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl leading-6 font-semibold text-slate-900" id="modal-title">
+                    {editingCadre ? 'Cập nhật thông tin cán bộ' : 'Thêm hồ sơ cán bộ mới'}
+                  </h3>
+                  <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors">
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+              
+              <form onSubmit={handleSave}>
+                <div className="bg-white px-4 pt-5 pb-4 sm:p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Cột 1 */}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Họ và Tên *</label>
+                        <input required type="text" name="hoTen" value={formData.hoTen} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="VD: Nguyễn Văn A"/>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Ngày sinh</label>
+                        <input type="date" name="ngaySinh" value={formData.ngaySinh} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"/>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Giới tính</label>
+                        <select name="gioiTinh" value={formData.gioiTinh} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                          <option value="Nam">Nam</option>
+                          <option value="Nữ">Nữ</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center pt-4">
+                        <input id="dangVien" name="dangVien" type="checkbox" checked={formData.dangVien} onChange={handleChange} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"/>
+                        <label htmlFor="dangVien" className="ml-2 block text-sm text-slate-900 font-medium">Là Đảng viên</label>
+                      </div>
+                    </div>
+
+                    {/* Cột 2 */}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Đơn vị công tác (Xã/Phường) *</label>
+                        <select required name="donVi" value={formData.donVi} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                          <option value="">-- Chọn đơn vị --</option>
+                          {donVis.map(dv => (
+                            <option key={dv} value={dv}>{dv}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Chức vụ MTTQ hiện tại *</label>
+                        <select required name="chucVu" value={formData.chucVu} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                          <option value="">-- Chọn chức vụ --</option>
+                          <option value="Chủ tịch">Chủ tịch</option>
+                          <option value="Phó Chủ tịch Thường trực">Phó Chủ tịch Thường trực</option>
+                          <option value="Phó Chủ tịch">Phó Chủ tịch</option>
+                          <option value="Ủy viên Thường trực">Ủy viên Thường trực</option>
+                          <option value="Chuyên viên">Chuyên viên</option>
+                          <option value="Cán bộ hợp đồng">Cán bộ hợp đồng</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Trình độ Chuyên môn</label>
+                        <input type="text" name="chuyenMon" value={formData.chuyenMon} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="VD: Đại học Luật"/>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Trình độ Lý luận chính trị</label>
+                        <select name="lyLuanCT" value={formData.lyLuanCT} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                          <option value="">-- Chọn trình độ --</option>
+                          <option value="Chưa qua đào tạo">Chưa qua đào tạo</option>
+                          <option value="Sơ cấp">Sơ cấp</option>
+                          <option value="Trung cấp">Trung cấp</option>
+                          <option value="Cao cấp">Cao cấp</option>
+                          <option value="Cử nhân">Cử nhân</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Số điện thoại liên hệ</label>
+                        <input type="text" name="sdt" value={formData.sdt} onChange={handleChange} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="09xxxxxxx"/>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-slate-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-slate-200 rounded-b-xl">
+                  <button type="submit" className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm transition-colors">
+                    <Save className="h-4 w-4 mr-2 mt-0.5" />
+                    Lưu hồ sơ
+                  </button>
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="mt-3 w-full inline-flex justify-center rounded-lg border border-slate-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors">
+                    Hủy bỏ
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
